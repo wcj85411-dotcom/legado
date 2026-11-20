@@ -115,7 +115,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                         utteranceId
                     )
                 }.getOrElse {
-                    AppLog.put("tts出错\\n${it.localizedMessage}", it, true)
+                    AppLog.put("tts出错\n${it.localizedMessage}", it, true)
                     TextToSpeech.ERROR
                 }
                 if (result == TextToSpeech.ERROR) {
@@ -131,7 +131,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             }
             LogUtils.d(TAG, "朗读内容添加完成，合并后请求数 ${batches.size}")
         }.onError {
-            AppLog.put("tts朗读出错\\n${it.localizedMessage}", it, true)
+            AppLog.put("tts朗读出错\n${it.localizedMessage}", it, true)
         }
     }
 
