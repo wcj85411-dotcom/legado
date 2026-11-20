@@ -103,6 +103,12 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 firstParagraphOffset = paragraphStartPos,
                 isSpeakable = { !it.matches(AppPattern.notReadAloudRegex) }
             )
+            if (batches.isEmpty()) {
+                // No speakable text remains (for example, a chapter containing only punctuation).
+                // There will be no TTS completion callback to advance the reader.
+                nextChapter()
+                return@execute
+            }
             var added = false
             for (batch in batches) {
                 ensureActive()
@@ -185,7 +191,9 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             if (currentBatchEndIndex(s) == null) return
             LogUtils.d(TAG, "onStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$s")
             textChapter?.let {
-                if (readAloudNumber + 1 > it.getReadLength(pageIndex + 1)) {
+                while (pageIndex + 1 < it.pageSize &&
+                    readAloudNumber + 1 > it.getReadLength(pageIndex + 1)
+                ) {
                     pageIndex++
                     ReadBook.moveToNextPage()
                 }
@@ -206,9 +214,15 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 "$TAG onRangeStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$utteranceId start:$start end:$end frame:$frame"
             LogUtils.d(TAG, msg)
             textChapter?.let {
-                if (readAloudNumber + start > it.getReadLength(pageIndex + 1)) {
+                var pageChangedByProgress = false
+                while (pageIndex + 1 < it.pageSize &&
+                    readAloudNumber + start > it.getReadLength(pageIndex + 1)
+                ) {
                     pageIndex++
                     ReadBook.moveToNextPage()
+                    pageChangedByProgress = true
+                }
+                if (pageChangedByProgress) {
                     upTtsProgress(readAloudNumber + start)
                 }
             }
