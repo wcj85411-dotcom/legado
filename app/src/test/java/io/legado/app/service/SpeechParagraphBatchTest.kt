@@ -11,6 +11,7 @@ class SpeechParagraphBatchTest {
             paragraphs = listOf("第一段。", "第二段。", "第三段。", "这是一个比较长的段落，应该单独朗读。"),
             startIndex = 0,
             firstParagraphOffset = 0,
+            maxShortParagraphLength = 10,
             isSpeakable = { true }
         )
 
@@ -40,7 +41,7 @@ class SpeechParagraphBatchTest {
         val batches = buildSpeechParagraphBatches(
             paragraphs = listOf("前面已经读过，后面继续。", "下一段。"),
             startIndex = 0,
-            firstParagraphOffset = 6,
+            firstParagraphOffset = 7,
             isSpeakable = { true }
         )
 
