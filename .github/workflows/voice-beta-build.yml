@@ -1,0 +1,47 @@
+name: Voice Beta Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - voice-optimized-3.25-base
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle'
+      - '*.properties'
+      - '.github/workflows/voice-beta-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build isolated debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleAppDebug testAppDebugUnitTest
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: read-voice-beta-debug
+          path: app/build/outputs/apk/app/debug/*.apk
+          if-no-files-found: error
