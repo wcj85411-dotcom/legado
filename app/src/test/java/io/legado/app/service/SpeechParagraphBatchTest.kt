@@ -51,6 +51,30 @@ class SpeechParagraphBatchTest {
     }
 
     @Test
+    fun returnsNoBatchesWhenAllRemainingParagraphsAreNotSpeakable() {
+        val batches = buildSpeechParagraphBatches(
+            paragraphs = listOf("……", "，。", "！？"),
+            startIndex = 0,
+            firstParagraphOffset = 0,
+            isSpeakable = { false }
+        )
+
+        assertEquals(emptyList<SpeechParagraphBatch>(), batches)
+    }
+
+    @Test
+    fun returnsNoBatchesWhenStartingAfterLastParagraph() {
+        val batches = buildSpeechParagraphBatches(
+            paragraphs = listOf("第一段。"),
+            startIndex = 1,
+            firstParagraphOffset = 0,
+            isSpeakable = { true }
+        )
+
+        assertEquals(emptyList<SpeechParagraphBatch>(), batches)
+    }
+
+    @Test
     fun respectsBatchParagraphAndCharacterLimits() {
         val paragraphs = listOf("短一", "短二", "短三", "短四")
         val batches = buildSpeechParagraphBatches(
