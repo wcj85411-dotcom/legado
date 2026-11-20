@@ -91,7 +91,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         }
         super.play()
         MediaHelp.playSilentSound(this@TTSReadAloudService)
-        speakJob?.cancel()
         val generation = playbackGeneration.incrementAndGet()
         speakJob?.cancel()
         speakJob = execute {
@@ -164,10 +163,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
      */
     override fun pauseReadAloud(abandonFocus: Boolean) {
         super.pauseReadAloud(abandonFocus)
-        speakJob?.cancel()
-        textToSpeech?.runCatching {
-            stop()
-        }
+        playStop()
     }
 
     /**
