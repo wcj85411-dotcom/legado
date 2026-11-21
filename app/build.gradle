@@ -146,18 +146,6 @@ android {
         }
     }
 
-    room {
-        schemaDirectory "$projectDir/schemas"
-    }
-    // 设定Room的KSP参数
-    ksp {
-        arg("room.incremental", "true")
-        arg("room.expandProjection", "true")
-        arg("room.generateKotlin", "false")
-        //arg("room.schemaLocation", "$projectDir/schemas")
-
-    }
-
     compileOptions {
         // Flag to enable support for the new language APIs
         coreLibraryDesugaringEnabled = true
@@ -206,6 +194,17 @@ android {
     lint { //忽略string翻译缺失，后面需要翻译时去掉，todo
         disable 'MissingTranslation'
     }
+}
+
+// Room and KSP are project-level plugin extensions, not Android DSL blocks.
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
+ksp {
+    arg("room.incremental", "true")
+    arg("room.expandProjection", "true")
+    arg("room.generateKotlin", "false")
 }
 
 def mockitoAgent = configurations.create('mockitoAgent') {
