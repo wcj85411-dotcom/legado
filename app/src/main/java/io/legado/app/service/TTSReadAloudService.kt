@@ -238,7 +238,13 @@ class TTSReadAloudService : BaseReadAloudService() {
      * current utterance is playing. Other TTS engines are left untouched.
      */
     private fun requestEdgePrefetchForNext(utteranceId: String?) {
-        if (selectedEnginePackage != "top.initsnow.edge_tts_android.prefetchtest") return
+        val prefetchAuthority = when (selectedEnginePackage) {
+            "top.initsnow.edge_tts_android.prefetchtest" ->
+                "top.initsnow.edge_tts_android.prefetchtest.prefetch"
+            "top.initsnow.edge_tts_android.prefetchtest.lab" ->
+                "top.initsnow.edge_tts_android.prefetchtest.lab.prefetch"
+            else -> return
+        }
         val index = utteranceId
             ?.split(':', limit = 5)
             ?.getOrNull(2)
@@ -254,7 +260,7 @@ class TTSReadAloudService : BaseReadAloudService() {
         runCatching {
             val extras = Bundle().apply { putString("text", nextText) }
             val response = contentResolver.call(
-                Uri.parse("content://top.initsnow.edge_tts_android.prefetchtest.prefetch"),
+                Uri.parse("content://$prefetchAuthority"),
                 "prefetch",
                 null,
                 extras
