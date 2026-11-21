@@ -4,11 +4,17 @@
 - Development branch: `personal-reader-development`
 - Base repository: `wcj85411-dotcom/legado`
 - Base commit: `330e606c4d57e08adc056ff8ab7a4132c784da9a`
-- Reference app supplied by the user: Legado / 阅读 3.25, package `io.legado.app.release`, versionCode 15604.
-- The APK's embedded Git revision `c8c9288e2d6b84d44d335b1c790854b54e791b7f` is not present in the available source repository history. The source baseline is therefore not yet proven byte-for-byte equivalent to that APK.
+- Reference app supplied by the user: 阅读 3.25, package `io.legado.app.release`, versionCode 15604.
+- The APK's embedded Git revision `c8c9288e2d6b84d44d335b1c790854b54e791b7f` is not present in the available source history. This source baseline is not proven byte-for-byte equivalent to the APK.
+- The app project uses `com.legado.app` as its base application ID, with distinct `.debug` and `.release` suffixes. It can coexist with the official package; it cannot overwrite it.
 
 ## Product direction
 Preserve the familiar reading experience and core capabilities first: bookshelf, reader, book sources, settings, reading progress, and backup/restore. Prioritize reliable Chinese Edge TTS playback and short inter-paragraph gaps. Avoid unrelated feature additions until the baseline is stable.
+
+## Changes made in this development branch
+- Added a manual, unsigned debug-build workflow at `.github/workflows/personal-reader-debug.yml`. It does not use any release signing material.
+- Added a narrow app-side Edge prefetch request in `TTSReadAloudService.kt`: when the configured engine is the dedicated Edge test package, the service requests the next paragraph during the current utterance. Other TTS engines are not changed by this code path.
+- The matching Edge engine change is in the companion repository branch `personal-reader-integration`: it allows only the new reader debug/release package IDs in addition to the earlier test packages, checks the Binder caller UID's installed packages, and rejects blank or over-6000-character prefetch requests.
 
 ## Build identity and signing
 - Build a separate debug package first. Do not attempt to overwrite the official app.
@@ -22,8 +28,8 @@ Preserve the familiar reading experience and core capabilities first: bookshelf,
 - The app's current network security configuration permits cleartext HTTP globally. This may be required by some user-configured book sources, so do not remove it blindly; later replace it with a user-visible, narrowly scoped compatibility policy and test HTTP/HTTPS sources.
 - Review exported components, storage permissions, WebView/JS execution, source-rule execution, and all downloaded build dependencies before publishing.
 
-## TTS integration plan
-The current mainline TTS service has a different queue/progress architecture from the earlier prefetch prototype. Do not copy the prototype service wholesale. First map its paragraph queue, utterance IDs, callback lifecycle, pause/resume, chapter transitions, and Edge provider IPC contract. Then add narrowly scoped prefetch integration with package/UID validation and tests. Keep normal Android TTS engines working unchanged.
+## TTS validation still required
+The current mainline TTS service has a different queue/progress architecture from the earlier prototype, so the old prototype service was not copied wholesale. The new app-side prefetch hook has not yet been compiled or device-tested. Confirm paragraph indexing in both normal and paragraph modes, and verify that stale callbacks, pause/resume, chapter changes, long paragraphs, errors, and network loss do not start duplicate or stale synthesis. The companion Edge engine build must include the matching provider allowlist change.
 
 ## Acceptance gates
 1. Debug build succeeds without release credentials.
