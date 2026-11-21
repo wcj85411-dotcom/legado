@@ -16,12 +16,11 @@ import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -34,16 +33,10 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
     private val ttsUtteranceListener = TTSUtteranceListener()
     private var speakJob: Coroutine<*>? = null
     private val playbackGeneration = AtomicLong()
-    @Volatile
-    private var activeUtterance: ActiveUtterance? = null
     private var retryBatchStartIndex = -1
     private var retryBatchCount = 0
     private val TAG = "TTSReadAloudService"
-
-    private data class ActiveUtterance(
-        val id: String,
-        val completion: CompletableDeferred<Boolean>
-    )
+    private val callbackHandler by lazy { buildMainHandler() }
 
     override fun onCreate() {
         super.onCreate()
@@ -71,7 +64,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
     @Synchronized
     fun clearTTS() {
         playbackGeneration.incrementAndGet()
-        activeUtterance = null
         textToSpeech?.runCatching {
             stop()
             shutdown()
@@ -113,52 +105,43 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 paragraphs = contentList,
                 startIndex = nowSpeak,
                 firstParagraphOffset = paragraphStartPos,
+                // Keep each original paragraph as its own utterance. Some third-party
+                // engines do not synthesize newline-joined paragraph batches reliably.
+                maxShortParagraphLength = 0,
                 isSpeakable = { !it.matches(AppPattern.notReadAloudRegex) }
             )
             if (batches.isEmpty()) {
-                // No speakable text remains (for example, a chapter containing only punctuation).
-                // There will be no TTS completion callback to advance the reader.
                 nextChapter()
                 return@execute
             }
+
+            var isAddedText = false
             for (batch in batches) {
                 ensureActive()
+                if (generation != playbackGeneration.get()) return@execute
                 val utteranceId = "${AppConst.APP_TAG}${generation}:${batch.startIndex}:${batch.endIndex}"
-                val completion = CompletableDeferred<Boolean>()
-                activeUtterance = ActiveUtterance(utteranceId, completion)
                 val result = tts.runCatching {
-                    // Submit one utterance at a time; do not pre-fill the engine queue.
-                    speak(batch.text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+                    // Match the stable reader's queue contract: flush once, then append.
+                    speak(
+                        batch.text,
+                        if (isAddedText) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH,
+                        null,
+                        utteranceId
+                    )
                 }.getOrElse {
-                    AppLog.put("tts出错\n${it.localizedMessage}", it, true)
+                    AppLog.put("tts出错\\n${it.localizedMessage}", it, true)
                     TextToSpeech.ERROR
                 }
 
-                val completed = if (result == TextToSpeech.ERROR) {
-                    false
-                } else {
-                    withTimeoutOrNull(180_000L) { completion.await() } ?: false
-                }
-                if (activeUtterance?.id == utteranceId) {
-                    activeUtterance = null
-                }
-
-                if (!completed) {
-                    recoverFromBatchFailure(
-                        batch,
-                        if (result == TextToSpeech.ERROR) "speak() 返回错误"
-                        else "语音批次失败或等待完成回调超时"
-                    )
+                if (result == TextToSpeech.ERROR) {
+                    recoverFromBatchFailure(batch, "speak() 返回错误")
                     return@execute
                 }
-
-                retryBatchStartIndex = -1
-                retryBatchCount = 0
-                advanceToNextParagraph(batch.endIndex)
+                isAddedText = true
             }
-            LogUtils.d(TAG, "朗读内容完成，串行处理批次数 ${batches.size}")
+            LogUtils.d(TAG, "朗读内容已加入引擎队列，段落数 ${batches.size}")
         }.onError {
-            AppLog.put("tts朗读出错\n${it.localizedMessage}", it, true)
+            AppLog.put("tts朗读出错\\n${it.localizedMessage}", it, true)
         }
     }
 
@@ -244,51 +227,63 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         private val TAG = "TTSUtteranceListener"
 
         override fun onStart(s: String) {
-            if (currentBatchEndIndex(s) == null) return
-            LogUtils.d(TAG, "onStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$s")
-            textChapter?.let {
-                while (pageIndex + 1 < it.pageSize &&
-                    readAloudNumber + 1 > it.getReadLength(pageIndex + 1)
-                ) {
-                    pageIndex++
-                    ReadBook.moveToNextPage()
+            dispatchCurrentCallback(s) {
+                if (currentBatchEndIndex(s) == null) return@dispatchCurrentCallback
+                LogUtils.d(TAG, "onStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$s")
+                textChapter?.let {
+                    while (pageIndex + 1 < it.pageSize &&
+                        readAloudNumber + 1 > it.getReadLength(pageIndex + 1)
+                    ) {
+                        pageIndex++
+                        ReadBook.moveToNextPage()
+                    }
+                    upTtsProgress(readAloudNumber + 1)
                 }
-                upTtsProgress(readAloudNumber + 1)
             }
         }
 
         override fun onDone(s: String) {
-            LogUtils.d(TAG, "onDone utteranceId:$s")
-            activeUtterance?.takeIf { it.id == s }?.completion?.complete(true)
+            dispatchCurrentCallback(s) {
+                val endIndex = currentBatchEndIndex(s) ?: return@dispatchCurrentCallback
+                LogUtils.d(TAG, "onDone utteranceId:$s")
+                retryBatchStartIndex = -1
+                retryBatchCount = 0
+                advanceToNextParagraph(endIndex)
+            }
         }
 
         override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
             super.onRangeStart(utteranceId, start, end, frame)
-            if (currentBatchEndIndex(utteranceId) == null) return
-            val msg =
-                "$TAG onRangeStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$utteranceId start:$start end:$end frame:$frame"
-            LogUtils.d(TAG, msg)
-            textChapter?.let {
-                var pageChangedByProgress = false
-                while (pageIndex + 1 < it.pageSize &&
-                    readAloudNumber + start > it.getReadLength(pageIndex + 1)
-                ) {
-                    pageIndex++
-                    ReadBook.moveToNextPage()
-                    pageChangedByProgress = true
-                }
-                if (pageChangedByProgress) {
-                    upTtsProgress(readAloudNumber + start)
+            dispatchCurrentCallback(utteranceId) {
+                if (currentBatchEndIndex(utteranceId) == null) return@dispatchCurrentCallback
+                val msg =
+                    "$TAG onRangeStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$utteranceId start:$start end:$end frame:$frame"
+                LogUtils.d(TAG, msg)
+                textChapter?.let {
+                    var pageChangedByProgress = false
+                    while (pageIndex + 1 < it.pageSize &&
+                        readAloudNumber + start > it.getReadLength(pageIndex + 1)
+                    ) {
+                        pageIndex++
+                        ReadBook.moveToNextPage()
+                        pageChangedByProgress = true
+                    }
+                    if (pageChangedByProgress) {
+                        upTtsProgress(readAloudNumber + start)
+                    }
                 }
             }
         }
 
         override fun onError(utteranceId: String?, errorCode: Int) {
-            LogUtils.d(
-                TAG,
-                "onError nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$utteranceId errorCode:$errorCode"
-            )
-            activeUtterance?.takeIf { it.id == utteranceId }?.completion?.complete(false)
+            dispatchCurrentCallback(utteranceId) {
+                LogUtils.d(
+                    TAG,
+                    "onError nowSpeak:$nowSpeak utteranceId:$utteranceId errorCode:$errorCode"
+                )
+                AppLog.put("语音引擎合成失败，错误代码：$errorCode")
+                pauseReadAloud()
+            }
         }
 
         private fun currentBatchEndIndex(utteranceId: String?): Int? {
@@ -299,10 +294,24 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 ?.takeIf { it in nowSpeak until contentList.size }
         }
 
+        private fun dispatchCurrentCallback(utteranceId: String?, block: () -> Unit) {
+            val id = utteranceId ?: return
+            val prefix = AppConst.APP_TAG
+            if (!id.startsWith(prefix)) return
+            val generation = id.substring(prefix.length)
+                .substringBefore(':')
+                .toLongOrNull() ?: return
+            if (generation != playbackGeneration.get()) return
+            callbackHandler.post {
+                synchronized(this@TTSReadAloudService) {
+                    if (generation == playbackGeneration.get()) block()
+                }
+            }
+        }
+
         @Deprecated("Deprecated in Java")
         override fun onError(s: String) {
-            LogUtils.d(TAG, "onError nowSpeak:$nowSpeak pageIndex:$pageIndex s:$s")
-            activeUtterance?.takeIf { it.id == s }?.completion?.complete(false)
+            onError(s, TextToSpeech.ERROR)
         }
 
     }
