@@ -147,7 +147,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
 
     override fun playStop() {
         playbackGeneration.incrementAndGet()
-        activeUtterance = null
         speakJob?.cancel()
         textToSpeech?.runCatching {
             stop()
