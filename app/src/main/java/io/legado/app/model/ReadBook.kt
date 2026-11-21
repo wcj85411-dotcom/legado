@@ -928,6 +928,10 @@ object ReadBook : CoroutineScope by MainScope() {
                 callBack?.cancelSelect()
                 callBack?.upContent()
                 saveRead(true)
+                if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
+                    // A manual page turn must invalidate the old page's queued speech.
+                    ReadAloud.playByEventBus(play = false, pageIndex = durPageIndex, startPos = 0)
+                }
             }
         }
         return hasNextPage
@@ -948,6 +952,10 @@ object ReadBook : CoroutineScope by MainScope() {
                 durChapterPos = prevPagePos
                 callBack?.upContent()
                 saveRead(true)
+                if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
+                    // Stop the previous page's speech and reset the paused position to this page.
+                    ReadAloud.playByEventBus(play = false, pageIndex = durPageIndex, startPos = 0)
+                }
             }
         }
         return hasPrevPage
