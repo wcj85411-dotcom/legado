@@ -1,6 +1,9 @@
 name: Personal Reader Debug Build
 
 on:
+  push:
+    branches:
+      - personal-reader-development
   workflow_dispatch:
 
 permissions:
