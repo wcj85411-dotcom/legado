@@ -2,6 +2,12 @@ name: Personal Reader Signed Release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - personal-reader-development
+    paths:
+      - 'app/src/main/java/io/legado/app/service/TTSReadAloudService.kt'
+      - '.github/workflows/personal-reader-signed-release.yml'
 
 permissions:
   contents: read
