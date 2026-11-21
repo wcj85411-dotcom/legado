@@ -107,9 +107,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 firstParagraphOffset = paragraphStartPos,
                 // Keep each original paragraph as its own utterance. Some third-party
                 // engines do not synthesize newline-joined paragraph batches reliably.
-                maxShortParagraphLength = 72,
-                maxBatchParagraphs = 2,
-                maxBatchLength = 240,
+                maxShortParagraphLength = 0,
                 isSpeakable = { !it.matches(AppPattern.notReadAloudRegex) }
             )
             if (batches.isEmpty()) {
