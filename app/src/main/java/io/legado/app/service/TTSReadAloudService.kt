@@ -1,6 +1,8 @@
 package io.legado.app.service
 
 import android.app.PendingIntent
+import android.net.Uri
+import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import io.legado.app.R
@@ -37,6 +39,9 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
     private var retryBatchCount = 0
     private val TAG = "TTSReadAloudService"
     private val callbackHandler by lazy { buildMainHandler() }
+    private var selectedEnginePackage: String? = null
+    private var speechBatches: List<SpeechParagraphBatch> = emptyList()
+    private var nextBatchIndex = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -52,6 +57,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
     private fun initTts() {
         ttsInitFinish = false
         val engine = GSON.fromJsonObject<SelectItem<String>>(ReadAloud.ttsEngine).getOrNull()?.value
+        selectedEnginePackage = engine
         LogUtils.d(TAG, "initTts engine:$engine")
         textToSpeech = if (engine.isNullOrBlank()) {
             TextToSpeech(this, this)
@@ -100,13 +106,11 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         speakJob = execute {
             LogUtils.d(TAG, "朗读列表大小 ${contentList.size}")
             LogUtils.d(TAG, "朗读页数 ${textChapter?.pageSize}")
-            val tts = textToSpeech ?: throw NoStackTraceException("tts is null")
             val batches = buildSpeechParagraphBatches(
                 paragraphs = contentList,
                 startIndex = nowSpeak,
                 firstParagraphOffset = paragraphStartPos,
-                // Keep each original paragraph as its own utterance. Some third-party
-                // engines do not synthesize newline-joined paragraph batches reliably.
+                // Preserve each original paragraph as a separate utterance.
                 maxShortParagraphLength = 0,
                 isSpeakable = { !it.matches(AppPattern.notReadAloudRegex) }
             )
@@ -115,33 +119,46 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 return@execute
             }
 
-            var isAddedText = false
-            for (batch in batches) {
-                ensureActive()
-                if (generation != playbackGeneration.get()) return@execute
-                val utteranceId = "${AppConst.APP_TAG}${generation}:${batch.startIndex}:${batch.endIndex}"
-                val result = tts.runCatching {
-                    // Match the stable reader's queue contract: flush once, then append.
-                    speak(
-                        batch.text,
-                        if (isAddedText) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        utteranceId
-                    )
-                }.getOrElse {
-                    AppLog.put("tts出错\\n${it.localizedMessage}", it, true)
-                    TextToSpeech.ERROR
-                }
-
-                if (result == TextToSpeech.ERROR) {
-                    recoverFromBatchFailure(batch, "speak() 返回错误")
-                    return@execute
-                }
-                isAddedText = true
-            }
-            LogUtils.d(TAG, "朗读内容已加入引擎队列，段落数 ${batches.size}")
+            // Submit only the current paragraph. The next one is prefetched by
+            // the Edge engine while this paragraph is playing, then queued onDone.
+            speechBatches = batches
+            nextBatchIndex = 0
+            speakNextBatch(generation)
+            LogUtils.d(TAG, "朗读队列已启动，段落数 ${batches.size}，采用逐段预合成")
         }.onError {
             AppLog.put("tts朗读出错\\n${it.localizedMessage}", it, true)
+        }
+    }
+
+    private fun speakNextBatch(generation: Long) {
+        if (generation != playbackGeneration.get()) return
+        val batch = speechBatches.getOrNull(nextBatchIndex++) ?: return
+        val utteranceId = "${AppConst.APP_TAG}${generation}:${batch.startIndex}:${batch.endIndex}"
+        val tts = textToSpeech ?: return
+        val result = tts.runCatching {
+            speak(batch.text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        }.getOrElse {
+            AppLog.put("tts出错\\n${it.localizedMessage}", it, true)
+            TextToSpeech.ERROR
+        }
+        if (result == TextToSpeech.ERROR) {
+            recoverFromBatchFailure(batch, "speak() 返回错误")
+        }
+    }
+
+    private fun requestEdgePrefetch(text: String) {
+        if (selectedEnginePackage != "top.initsnow.edge_tts_android.pooltest") return
+        try {
+            val extras = Bundle().apply { putString("text", text) }
+            val result = contentResolver.call(
+                Uri.parse("content://top.initsnow.edge_tts_android.pooltest.prefetch"),
+                "prefetch",
+                null,
+                extras
+            )
+            LogUtils.d(TAG, "Edge 后台预合成请求 accepted=${result?.getBoolean("accepted", false)}")
+        } catch (exception: Exception) {
+            LogUtils.d(TAG, "Edge 后台预合成暂不可用: ${exception.message}")
         }
     }
 
@@ -229,6 +246,9 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             dispatchCurrentCallback(s) {
                 if (currentBatchEndIndex(s) == null) return@dispatchCurrentCallback
                 LogUtils.d(TAG, "onStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$s")
+                speechBatches.getOrNull(nextBatchIndex)?.let { nextBatch ->
+                    requestEdgePrefetch(nextBatch.text)
+                }
                 textChapter?.let {
                     while (pageIndex + 1 < it.pageSize &&
                         readAloudNumber + 1 > it.getReadLength(pageIndex + 1)
@@ -248,6 +268,9 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 retryBatchStartIndex = -1
                 retryBatchCount = 0
                 advanceToNextParagraph(endIndex)
+                if (nowSpeak < contentList.size) {
+                    speakNextBatch(playbackGeneration.get())
+                }
             }
         }
 
