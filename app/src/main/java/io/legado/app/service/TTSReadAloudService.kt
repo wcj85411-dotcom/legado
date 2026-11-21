@@ -130,14 +130,14 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                     // Submit one utterance at a time; do not pre-fill the engine queue.
                     speak(batch.text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
                 }.getOrElse {
-                    AppLog.put("tts出错\\n${it.localizedMessage}", it, true)
+                    AppLog.put("tts出错\n${it.localizedMessage}", it, true)
                     TextToSpeech.ERROR
                 }
 
                 val completed = if (result == TextToSpeech.ERROR) {
                     false
                 } else {
-                    withTimeoutOrNull(120_000L) { completion.await() } ?: false
+                    withTimeoutOrNull(180_000L) { completion.await() } ?: false
                 }
                 if (activeUtterance?.id == utteranceId) {
                     activeUtterance = null
