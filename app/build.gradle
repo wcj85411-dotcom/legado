@@ -19,8 +19,8 @@ static def releaseTime() {
     return new Date().format("yy.MMddHH", TimeZone.getTimeZone("GMT+8"))
 }
 
-def name = "read-voice-beta"
-def version = "3.25-voice-beta"
+def name = "read-voice-beta-E"
+def version = "3.25-E-repair"
 def gitCommits = Integer.parseInt('git rev-list HEAD --count'.execute().text.trim())
 
 android {
