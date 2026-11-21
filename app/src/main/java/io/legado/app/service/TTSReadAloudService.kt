@@ -1,6 +1,8 @@
 package io.legado.app.service
 
 import android.app.PendingIntent
+import android.net.Uri
+import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import io.legado.app.R
@@ -46,6 +48,7 @@ class TTSReadAloudService : BaseReadAloudService() {
 
     private var textToSpeech: TextToSpeech? = null
     private var ttsInitFinish = false
+    private var selectedEnginePackage: String? = null
     private var ttsInitGeneration = 0L
     private val ttsUtteranceListener = TTSUtteranceListener()
     private var speakJob: Coroutine<*>? = null
@@ -77,6 +80,7 @@ class TTSReadAloudService : BaseReadAloudService() {
             callbackHandler.post { onTtsInitialized(generation, status) }
         }
         val engine = GSON.fromJsonObject<SelectItem<String>>(ReadAloud.ttsEngine).getOrNull()?.value
+        selectedEnginePackage = engine
         LogUtils.d(TAG, "initTts engine:$engine")
         textToSpeech = if (engine.isNullOrBlank()) {
             TextToSpeech(this, listener)
@@ -229,6 +233,38 @@ class TTSReadAloudService : BaseReadAloudService() {
         }
     }
 
+    /**
+     * Ask the Edge engine to synthesize the next reader paragraph while the
+     * current utterance is playing. Other TTS engines are left untouched.
+     */
+    private fun requestEdgePrefetchForNext(utteranceId: String?) {
+        if (selectedEnginePackage != "top.initsnow.edge_tts_android.prefetchtest") return
+        val index = utteranceId
+            ?.split(':', limit = 5)
+            ?.getOrNull(2)
+            ?.toIntOrNull()
+            ?: return
+        val nextText = if (paragraphMode) {
+            paragraphSpeechItems.getOrNull(index + 1)?.text
+        } else {
+            contentList.getOrNull(index + 1)
+        } ?: return
+        if (nextText.isBlank() || nextText.length > 6000) return
+
+        runCatching {
+            val extras = Bundle().apply { putString("text", nextText) }
+            val response = contentResolver.call(
+                Uri.parse("content://top.initsnow.edge_tts_android.prefetchtest.prefetch"),
+                "prefetch",
+                null,
+                extras
+            )
+            LogUtils.d(TAG, "Edge next-paragraph prefetch accepted=${response?.getBoolean("accepted", false)}")
+        }.onFailure {
+            LogUtils.d(TAG, "Edge next-paragraph prefetch unavailable: ${it.message}")
+        }
+    }
+
     @Synchronized
     override fun playStop() {
         playbackSessionId.incrementAndGet()
@@ -280,6 +316,7 @@ class TTSReadAloudService : BaseReadAloudService() {
 
         override fun onStart(s: String) {
             dispatchCurrentCallback(s) {
+                requestEdgePrefetchForNext(s)
                 if (paragraphMode) {
                     utteranceParagraphIndex(s)?.let(::paragraphStarted)
                     return@dispatchCurrentCallback
