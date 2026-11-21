@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - voice-optimized-3.25-base
+      - voice-optimized-3.25-edge-compat
     paths:
       - 'app/**'
       - 'gradle/**'
