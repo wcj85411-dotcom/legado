@@ -154,7 +154,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
 
                 retryBatchStartIndex = -1
                 retryBatchCount = 0
-                nextParagraph(batch.endIndex)
+                advanceToNextParagraph(batch.endIndex)
             }
             LogUtils.d(TAG, "朗读内容完成，串行处理批次数 ${batches.size}")
         }.onError {
@@ -219,6 +219,23 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
         play()
     }
 
+    private fun advanceToNextParagraph(lastBatchIndex: Int = nowSpeak) {
+        // Advance over every original paragraph represented by this utterance.
+        do {
+            if (nowSpeak >= contentList.size) {
+                nextChapter()
+                return
+            }
+            readAloudNumber += contentList[nowSpeak].length + 1 - paragraphStartPos
+            paragraphStartPos = 0
+            nowSpeak++
+            if (nowSpeak >= contentList.size) {
+                nextChapter()
+                return
+            }
+        } while (nowSpeak <= lastBatchIndex || contentList[nowSpeak].matches(AppPattern.notReadAloudRegex))
+    }
+
     /**
      * 朗读监听
      */
@@ -280,23 +297,6 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             if (!id.startsWith(prefix)) return null
             return id.substringAfterLast(':').toIntOrNull()
                 ?.takeIf { it in nowSpeak until contentList.size }
-        }
-
-        private fun nextParagraph(lastBatchIndex: Int = nowSpeak) {
-            // Advance over every original paragraph represented by this utterance.
-            do {
-                if (nowSpeak >= contentList.size) {
-                    nextChapter()
-                    return
-                }
-                readAloudNumber += contentList[nowSpeak].length + 1 - paragraphStartPos
-                paragraphStartPos = 0
-                nowSpeak++
-                if (nowSpeak >= contentList.size) {
-                    nextChapter()
-                    return
-                }
-            } while (nowSpeak <= lastBatchIndex || contentList[nowSpeak].matches(AppPattern.notReadAloudRegex))
         }
 
         @Deprecated("Deprecated in Java")
