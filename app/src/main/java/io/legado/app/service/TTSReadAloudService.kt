@@ -147,11 +147,11 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
     }
 
     private fun requestEdgePrefetch(text: String) {
-        if (selectedEnginePackage != "top.initsnow.edge_tts_android.pooltest") return
+        if (selectedEnginePackage != "top.initsnow.edge_tts_android.prefetchtest") return
         try {
             val extras = Bundle().apply { putString("text", text) }
             val result = contentResolver.call(
-                Uri.parse("content://top.initsnow.edge_tts_android.pooltest.prefetch"),
+                Uri.parse("content://top.initsnow.edge_tts_android.prefetchtest.prefetch"),
                 "prefetch",
                 null,
                 extras
