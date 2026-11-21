@@ -2,9 +2,6 @@ name: Personal Reader Signed Release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - personal-reader-development
 
 permissions:
   contents: read
