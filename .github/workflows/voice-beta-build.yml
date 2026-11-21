@@ -6,6 +6,7 @@ on:
     branches:
       - voice-optimized-3.25-base
       - voice-optimized-3.25-edge-compat
+      - voice-parallel-prefetch-prototype
     paths:
       - 'app/**'
       - 'gradle/**'
