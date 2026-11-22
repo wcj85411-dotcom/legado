@@ -93,6 +93,21 @@ class ParagraphAloudHighlightTest {
     }
 
     @Test
+    fun plainItemsMapSpeechOffsetsForwardAndClampAtTheirEnd() {
+        val item = ParagraphItem("plain", "abcd", chapterPosition = 40)
+        assertEquals(40, item.canonicalPositionAt(0))
+        assertEquals(42, item.canonicalPositionAt(2))
+        assertEquals(44, item.canonicalPositionAt(99))
+    }
+
+    @Test
+    fun plainItemCanonicalOffsetsDoNotOverflow() {
+        val item = ParagraphItem("plain", "abcd", chapterPosition = Int.MAX_VALUE - 2)
+        assertEquals(Int.MAX_VALUE - 2, item.canonicalPositionAt(0))
+        assertEquals(Int.MAX_VALUE, item.canonicalPositionAt(99))
+    }
+
+    @Test
     fun boundsLargeCanonicalPositionsWithoutIntegerOverflow() {
         val item = ParagraphItem("text", "abcd", chapterPosition = Int.MAX_VALUE - 2)
         assertEquals(2, highlight(Int.MAX_VALUE).textStart(item))
