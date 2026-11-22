@@ -902,10 +902,11 @@ object ReadBook : CoroutineScope by MainScope() {
         val restartReadAloud = ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
             isReadAloudRunning = BaseReadAloudService.isRun,
             speechDrivenNavigation = syncReadAloudFollow,
-            followManualPageTurns = AppConfig.readAloudFollowManualPage,
-            followingReadAloudPosition = ReadAloud.followReadAloudPosition
+            followManualPageTurns = AppConfig.readAloudFollowManualPage
         )
-        if (BaseReadAloudService.isRun && !syncReadAloudFollow && !restartReadAloud) {
+        if (restartReadAloud) {
+            ReadAloud.restoreReadAloudFollow()
+        } else if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
             ReadAloud.detachReadAloudFollow()
         }
         return restartReadAloud

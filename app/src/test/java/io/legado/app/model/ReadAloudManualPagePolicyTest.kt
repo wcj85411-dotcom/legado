@@ -13,8 +13,18 @@ class ReadAloudManualPagePolicyTest {
             ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
                 isReadAloudRunning = true,
                 speechDrivenNavigation = false,
-                followManualPageTurns = true,
-                followingReadAloudPosition = true
+                followManualPageTurns = true
+            )
+        )
+    }
+
+    @Test
+    fun `enabled manual navigation restarts even after follow was detached`() {
+        assertTrue(
+            ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
+                isReadAloudRunning = true,
+                speechDrivenNavigation = false,
+                followManualPageTurns = true
             )
         )
     }
@@ -25,32 +35,21 @@ class ReadAloudManualPagePolicyTest {
             ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
                 isReadAloudRunning = true,
                 speechDrivenNavigation = false,
-                followManualPageTurns = false,
-                followingReadAloudPosition = true
+                followManualPageTurns = false
             )
         )
         assertFalse(
             ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
                 isReadAloudRunning = true,
                 speechDrivenNavigation = true,
-                followManualPageTurns = true,
-                followingReadAloudPosition = true
+                followManualPageTurns = true
             )
         )
         assertFalse(
             ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
                 isReadAloudRunning = false,
                 speechDrivenNavigation = false,
-                followManualPageTurns = true,
-                followingReadAloudPosition = true
-            )
-        )
-        assertFalse(
-            ReadAloudManualPagePolicy.shouldRestartFromVisiblePage(
-                isReadAloudRunning = true,
-                speechDrivenNavigation = false,
-                followManualPageTurns = true,
-                followingReadAloudPosition = false
+                followManualPageTurns = true
             )
         )
     }
@@ -89,6 +88,7 @@ class ReadAloudManualPagePolicyTest {
         assertTrue(appConfig.contains("PreferKey.readAloudFollowManualPage, true"))
         assertTrue(appConfig.contains("readAloudFollowManualPageDefaultV1"))
         assertTrue(readBook.contains("prepareReadAloudPageNavigation"))
+        assertTrue(readBook.contains("ReadAloud.restoreReadAloudFollow()"))
         val nextPage = readBook.substringAfter("fun moveToNextPage").substringBefore("fun moveToPrevPage")
         val prevPage = readBook.substringAfter("fun moveToPrevPage").substringBefore("fun moveToNextChapter")
         assertTrue(nextPage.contains("prepareReadAloudPageNavigation(syncReadAloudFollow)"))

@@ -5,10 +5,8 @@ object ReadAloudManualPagePolicy {
     fun shouldRestartFromVisiblePage(
         isReadAloudRunning: Boolean,
         speechDrivenNavigation: Boolean,
-        followManualPageTurns: Boolean,
-        followingReadAloudPosition: Boolean
+        followManualPageTurns: Boolean
     ): Boolean {
-        return isReadAloudRunning && !speechDrivenNavigation && followManualPageTurns &&
-                followingReadAloudPosition
+        return isReadAloudRunning && !speechDrivenNavigation && followManualPageTurns
     }
 }
