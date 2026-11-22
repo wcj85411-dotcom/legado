@@ -42,7 +42,7 @@
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.SwitchPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="readAloudFollowManualPage"
             android:summary="@string/read_aloud_follow_manual_page_summary"
             android:title="@string/read_aloud_follow_manual_page"

@@ -912,12 +912,10 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     fun moveToNextPage(syncReadAloudFollow: Boolean = false): Boolean {
-        if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
-            ReadAloud.detachReadAloudFollow()
-        }
         if (syncReadAloudFollow && !BaseReadAloudService.shouldSyncSpeechNavigation()) {
             return false
         }
+        val restartReadAloud = prepareReadAloudPageNavigation(syncReadAloudFollow)
         var hasNextPage = false
         curTextChapter?.let {
             val nextPagePos = it.getNextPageLength(durChapterPos)
@@ -930,7 +928,9 @@ object ReadBook : CoroutineScope by MainScope() {
                 saveRead(true)
                 if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
                     // A manual page turn must invalidate the old page's queued speech.
-                    ReadAloud.playByEventBus(play = false, pageIndex = durPageIndex, startPos = 0)
+                    ReadAloud.playByEventBus(
+                        play = restartReadAloud, pageIndex = durPageIndex, startPos = 0
+                    )
                 }
             }
         }
@@ -938,12 +938,10 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     fun moveToPrevPage(syncReadAloudFollow: Boolean = false): Boolean {
-        if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
-            ReadAloud.detachReadAloudFollow()
-        }
         if (syncReadAloudFollow && !BaseReadAloudService.shouldSyncSpeechNavigation()) {
             return false
         }
+        val restartReadAloud = prepareReadAloudPageNavigation(syncReadAloudFollow)
         var hasPrevPage = false
         curTextChapter?.let {
             val prevPagePos = it.getPrevPageLength(durChapterPos)
@@ -953,8 +951,10 @@ object ReadBook : CoroutineScope by MainScope() {
                 callBack?.upContent()
                 saveRead(true)
                 if (BaseReadAloudService.isRun && !syncReadAloudFollow) {
-                    // Stop the previous page's speech and reset the paused position to this page.
-                    ReadAloud.playByEventBus(play = false, pageIndex = durPageIndex, startPos = 0)
+                    // Restart from the first character of this page when manual-page follow is enabled.
+                    ReadAloud.playByEventBus(
+                        play = restartReadAloud, pageIndex = durPageIndex, startPos = 0
+                    )
                 }
             }
         }

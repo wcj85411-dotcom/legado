@@ -30,6 +30,17 @@ import java.net.InetAddress
 
 @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
+    init {
+        // The personal reader should resume speech from the first character of a
+        // manually selected page by default. Keep the setting user-configurable
+        // after this one-time migration.
+        val migrationKey = "readAloudFollowManualPageDefaultV1"
+        if (!appCtx.getPrefBoolean(migrationKey, false)) {
+            appCtx.putPrefBoolean(PreferKey.readAloudFollowManualPage, true)
+            appCtx.putPrefBoolean(migrationKey, true)
+        }
+    }
+
     val paragraphReadMode get() = appCtx.getPrefBoolean(PreferKey.paragraphReadMode, false)
     val paragraphReadControls get() = appCtx.getPrefBoolean(PreferKey.paragraphReadControls, true)
     val paragraphReadProgress get() = appCtx.getPrefBoolean(PreferKey.paragraphReadProgress, true)
@@ -772,7 +783,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefString(PreferKey.readAloudStart, "sentence") != "page"
 
     val readAloudFollowManualPage
-        get() = appCtx.getPrefBoolean(PreferKey.readAloudFollowManualPage, false)
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudFollowManualPage, true)
 
     val replaceEnableDefault get() = appCtx.getPrefBoolean(PreferKey.replaceEnableDefault, true)
 

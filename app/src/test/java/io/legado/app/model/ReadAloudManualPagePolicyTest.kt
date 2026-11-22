@@ -76,7 +76,7 @@ class ReadAloudManualPagePolicyTest {
     }
 
     @Test
-    fun `preference remains opt in and is wired to page navigation`() {
+    fun `manual page follow is enabled by default and wired to page navigation`() {
         val preference = readProjectFile("src/main/res/xml/pref_config_aloud.xml")
         val appConfig = readProjectFile("src/main/java/io/legado/app/help/config/AppConfig.kt")
         val readBook = readProjectFile("src/main/java/io/legado/app/model/ReadBook.kt")
@@ -85,9 +85,16 @@ class ReadAloudManualPagePolicyTest {
             .substringAfterLast("<io.legado.app.lib.prefs.SwitchPreference") +
             keyMarker + preference.substringAfter(keyMarker).substringBefore("/>")
 
-        assertTrue(preferenceSection.contains("android:defaultValue=\"false\""))
-        assertTrue(appConfig.contains("PreferKey.readAloudFollowManualPage, false"))
+        assertTrue(preferenceSection.contains("android:defaultValue=\"true\""))
+        assertTrue(appConfig.contains("PreferKey.readAloudFollowManualPage, true"))
+        assertTrue(appConfig.contains("readAloudFollowManualPageDefaultV1"))
         assertTrue(readBook.contains("prepareReadAloudPageNavigation"))
+        val nextPage = readBook.substringAfter("fun moveToNextPage").substringBefore("fun moveToPrevPage")
+        val prevPage = readBook.substringAfter("fun moveToPrevPage").substringBefore("fun moveToNextChapter")
+        assertTrue(nextPage.contains("prepareReadAloudPageNavigation(syncReadAloudFollow)"))
+        assertTrue(prevPage.contains("prepareReadAloudPageNavigation(syncReadAloudFollow)"))
+        assertTrue(nextPage.contains("play = restartReadAloud, pageIndex = durPageIndex, startPos = 0"))
+        assertTrue(prevPage.contains("play = restartReadAloud, pageIndex = durPageIndex, startPos = 0"))
         assertTrue(
             readBook.lines().count {
                 it.contains("restartReadAloudFromVisiblePage = restartReadAloud")
