@@ -15,8 +15,15 @@ data class ParagraphItem(
 
     /** Maps a UTF-16 text offset back to the existing page/TTS chapter coordinate. */
     fun canonicalPositionAt(textOffset: Int): Int {
-        if (positionRanges.isEmpty()) return chapterPosition
         val offset = textOffset.coerceIn(0, text.length)
+        if (positionRanges.isEmpty()) {
+            // Plain text items still need a one-to-one display-to-chapter mapping.
+            // Returning only chapterPosition freezes the speech cursor at the first
+            // character, so range callbacks can never advance the visible highlight.
+            return (chapterPosition.toLong() + offset)
+                .coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong())
+                .toInt()
+        }
         val range = positionRanges.firstOrNull { offset >= it.textStart && offset < it.textEnd }
             ?: if (offset >= positionRanges.last().textEnd) positionRanges.last()
             else positionRanges.firstOrNull { it.textStart >= offset } ?: positionRanges.first()
